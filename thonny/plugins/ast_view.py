@@ -6,6 +6,7 @@ from logging import getLogger
 from typing import Optional
 
 from thonny import ast_utils, get_workbench, ui_utils
+from thonny.tktextext import bind_all_text_classes
 from thonny.common import TextRange, range_contains_smaller
 from thonny.languages import tr
 
@@ -28,7 +29,7 @@ class AstView(ui_utils.TreeFrame):
         get_workbench().get_editor_notebook().bind("<<NotebookTabChanged>>", self._update, True)
         get_workbench().bind("Save", self._update, True)
         get_workbench().bind("SaveAs", self._update, True)
-        get_workbench().bind_class("Text", "<Double-Button-1>", self._update, True)
+        bind_all_text_classes(get_workbench(), "<Double-Button-1>", self._update, True)
 
         self.tree.column("#0", width=550, anchor=tk.W)
         self.tree.column("range", width=100, anchor=tk.W)

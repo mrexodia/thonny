@@ -4,6 +4,7 @@ import tkinter as tk
 from logging import getLogger
 
 from thonny import get_workbench, ui_utils
+from thonny.tktextext import bind_all_text_classes
 from thonny.languages import tr
 from thonny.ui_utils import ems_to_pixels
 
@@ -31,8 +32,8 @@ class TodoView(ui_utils.TreeFrame):
         get_workbench().bind("Save", self._update, True)
         get_workbench().bind("SaveAs", self._update, True)
 
-        get_workbench().bind_class("Text", "<Double-Button-1>", self._update, True)
-        get_workbench().bind_class("Text", "<<NewLine>>", self._update, True)
+        bind_all_text_classes(get_workbench(), "<Double-Button-1>", self._update, True)
+        bind_all_text_classes(get_workbench(), "<<NewLine>>", self._update, True)
 
         get_workbench().get_editor_notebook().bind("<<NotebookTabChanged>>", self._update, True)
         get_workbench().bind_class("EditorCodeViewText", "<<TextChange>>", self._text_change, True)

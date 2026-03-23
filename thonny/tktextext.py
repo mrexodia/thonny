@@ -33,6 +33,13 @@ class TweakableText(tk.Text):
         self._original_mark = self._register_tk_proxy_function("mark", self.intercept_mark)
         self.bind("<Control-Tab>", self._redirect_ctrl_tab, False)
 
+        # ntext is the maintained successor of modernText.
+        try:
+            self.tk.call("package", "present", "ntext")
+            self.bindtags([str(self), "Ntext", ".", "all"])
+        except tk.TclError as x:
+            logger.error(f"Tcl error from ntext: {x}")
+
     def _register_tk_proxy_function(self, operation, function):
         self._tk_proxies[operation] = function
         setattr(self, operation, function)
@@ -1248,6 +1255,12 @@ def fixwordbreaks(root):
     root.tk.call("set", "tcl_nonwordchars", r"\W")
 
 
+def bind_all_text_classes(root, sequence, func, add=None):
+    """Bind handlers for both stock Tk Text widgets and ntext-backed widgets."""
+    root.bind_class("Text", sequence, func, add)
+    root.bind_class("Ntext", sequence, func, add)
+
+
 def rebind_control_a(root):
     # Tk 8.6 has <<SelectAll>> event but 8.5 doesn't
     # http://stackoverflow.com/questions/22907200/remap-default-keybinding-in-tkinter
@@ -1257,7 +1270,7 @@ def rebind_control_a(root):
             widget.tag_remove("sel", "1.0", "end")
             widget.tag_add("sel", "1.0", "end")
 
-    root.bind_class("Text", "<Control-a>", control_a)
+    bind_all_text_classes(root, "<Control-a>", control_a)
 
 
 def _running_on_mac():

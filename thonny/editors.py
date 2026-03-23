@@ -52,7 +52,7 @@ from thonny.misc_utils import (
     uri_to_long_title,
     uri_to_target_path,
 )
-from thonny.tktextext import rebind_control_a
+from thonny.tktextext import bind_all_text_classes, rebind_control_a
 from thonny.ui_utils import (
     askopenfilename,
     asksaveasfilename,
@@ -957,8 +957,8 @@ class EditorNotebook(CustomNotebook):
         )
 
         # http://stackoverflow.com/questions/22907200/remap-default-keybinding-in-tkinter
-        get_workbench().bind_class("Text", "<Control-o>", self._control_o)
-        get_workbench().bind_class("Text", "<Control-Greek_omicron>", self._control_o)
+        bind_all_text_classes(get_workbench(), "<Control-o>", self._control_o)
+        bind_all_text_classes(get_workbench(), "<Control-Greek_omicron>", self._control_o)
         rebind_control_a(get_workbench())
 
         get_workbench().add_command(
