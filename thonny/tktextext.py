@@ -328,6 +328,7 @@ class EnhancedText(TweakableText):
 
     def _bind_selection_aids(self):
         self.bind("<Command-a>" if _running_on_mac() else "<Control-a>", self.select_all, True)
+        self.bind("<Escape>", self.clear_selection, True)
 
     def _bind_undo_aids(self):
         self.bind("<<Undo>>", self._on_undo, True)
@@ -629,6 +630,13 @@ class EnhancedText(TweakableText):
     def select_all(self, event):
         self.tag_remove("sel", "1.0", tk.END)
         self.tag_add("sel", "1.0", tk.END)
+
+    def clear_selection(self, event=None):
+        if not self.has_selection():
+            return None
+
+        self.tag_remove("sel", "1.0", tk.END)
+        return "break"
 
     def set_read_only(self, value):
         if value == self.is_read_only():

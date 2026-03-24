@@ -67,3 +67,19 @@ def test_shift_click_fix_does_not_break_plain_mouse_selection():
         assert [text.index(r) for r in text.tag_ranges("sel")] == ["2.0", "2.3"]
     finally:
         root.destroy()
+
+
+def test_escape_clears_selection():
+    root = tk.Tk()
+    try:
+        text = EnhancedText(root, width=40, height=10)
+        text.pack()
+        text.insert("1.0", TEST_TEXT)
+        root.update()
+
+        text.tag_add("sel", "2.0", "2.3")
+        assert text.clear_selection() == "break"
+
+        assert [text.index(r) for r in text.tag_ranges("sel")] == []
+    finally:
+        root.destroy()
