@@ -1,4 +1,5 @@
 import tkinter as tk
+from types import SimpleNamespace
 
 from thonny.tktextext import EnhancedText
 
@@ -81,5 +82,26 @@ def test_escape_clears_selection():
         assert text.clear_selection() == "break"
 
         assert [text.index(r) for r in text.tag_ranges("sel")] == []
+    finally:
+        root.destroy()
+
+
+def test_smart_end_moves_to_display_end_then_logical_end():
+    root = tk.Tk()
+    try:
+        text = EnhancedText(root, width=8, height=5, wrap="word")
+        text.pack()
+        text.insert("1.0", "alpha beta gamma delta")
+        text.mark_set("insert", "1.0")
+        root.update()
+
+        display_end = text.index("insert display lineend")
+        logical_end = text.index("insert lineend")
+
+        text.perform_smart_end(SimpleNamespace(state=0, keysym="End"))
+        assert text.index("insert") == display_end
+
+        text.perform_smart_end(SimpleNamespace(state=0, keysym="End"))
+        assert text.index("insert") == logical_end
     finally:
         root.destroy()

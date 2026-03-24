@@ -321,6 +321,7 @@ class EnhancedText(TweakableText):
 
     def _bind_movement_aids(self):
         self.bind("<Home>", self.perform_smart_home, True)
+        self.bind("<End>", self.perform_smart_end, True)
         self.bind("<Left>", self.move_to_edge_if_selection(0), True)
         self.bind("<Right>", self.move_to_edge_if_selection(1), True)
         self.bind("<Next>", self.perform_page_down, True)
@@ -543,8 +544,25 @@ class EnhancedText(TweakableText):
             return None
 
         dest = self.compute_smart_home_destination_index()
+        return self._move_to_index(dest, event.state)
 
-        if (event.state & 1) == 0:
+    def compute_smart_end_destination_index(self):
+        display_end = self.index("insert display lineend")
+        if display_end == self.index("insert"):
+            return self.index("insert lineend")
+        else:
+            return display_end
+
+    def perform_smart_end(self, event):
+        if (event.state & 4) != 0 and event.keysym == "End":
+            # state&4==Control. If <Control-End>, use the Tk binding.
+            return None
+
+        dest = self.compute_smart_end_destination_index()
+        return self._move_to_index(dest, event.state)
+
+    def _move_to_index(self, dest, state):
+        if (state & 1) == 0:
             # shift was not pressed
             self.tag_remove("sel", "1.0", "end")
         else:
