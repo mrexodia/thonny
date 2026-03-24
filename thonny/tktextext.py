@@ -229,6 +229,7 @@ class EnhancedText(TweakableText):
 
         self._last_event_kind = None
         self._last_key_time = None
+        self._shift_click_anchor_index = None
 
         self._bind_keypad()
         self._bind_editing_aids()
@@ -255,9 +256,7 @@ class EnhancedText(TweakableText):
         return True
 
     def _bind_mouse_aids(self):
-        self.bind("<Shift-1>", self._prepare_anchor_for_shift_click, True)
-        self.bind("<Double-Shift-1>", self._prepare_anchor_for_shift_click, True)
-        self.bind("<Triple-Shift-1>", self._prepare_anchor_for_shift_click, True)
+        self.bind("<Shift-1>", self._perform_shift_click_selection, True)
 
         if _running_on_mac():
             self.bind("<Button-2>", self.on_secondary_click)
@@ -646,6 +645,7 @@ class EnhancedText(TweakableText):
         return "break"
 
     def select_all(self, event):
+        self._shift_click_anchor_index = None
         self.tag_remove("sel", "1.0", tk.END)
         self.tag_add("sel", "1.0", tk.END)
 
@@ -653,6 +653,7 @@ class EnhancedText(TweakableText):
         if not self.has_selection():
             return None
 
+        self._shift_click_anchor_index = None
         self.tag_remove("sel", "1.0", tk.END)
         return "break"
 
@@ -773,15 +774,65 @@ class EnhancedText(TweakableText):
 
     def _on_mouse_click(self, event):
         self.edit_separator()
+        if (event.state & 1) == 0:
+            self._shift_click_anchor_index = None
 
-    def _prepare_anchor_for_shift_click(self, event):
+    def _perform_shift_click_selection(self, event):
         # Make Shift+click start from the current insertion cursor position,
-        # not from the previous mouse click location.
-        if self.has_selection():
-            return
-
+        # not from the previous mouse click location, and keep the same anchor
+        # across repeated Shift+click operations.
         anchor_name = self.tk.call("::tk::TextAnchor", self._w)
-        self.direct_mark("set", anchor_name, "insert")
+        fixed_anchor_index = self._get_shift_click_anchor_index(anchor_name)
+        self._shift_click_anchor_index = fixed_anchor_index
+        self.direct_mark("set", anchor_name, fixed_anchor_index)
+
+        current_index = self.index(f"@{event.x},{event.y}")
+        if self.compare(current_index, "<", fixed_anchor_index):
+            first, last = current_index, fixed_anchor_index
+        else:
+            first, last = fixed_anchor_index, current_index
+
+        self.tag_remove("sel", "1.0", "end")
+        if self.compare(first, "!=", last):
+            self.tag_add("sel", first, last)
+
+        self.mark_set("insert", current_index)
+        self.see("insert")
+        return "break"
+
+    def _get_shift_click_anchor_index(self, tk_anchor_name):
+        selection_ends = self._get_selection_ends()
+
+        if self.has_selection() and self._shift_click_anchor_index in selection_ends:
+            return self._shift_click_anchor_index
+
+        tk_anchor_index = self._get_mark_index(tk_anchor_name)
+        if self.has_selection() and tk_anchor_index in selection_ends:
+            return tk_anchor_index
+
+        if self.has_selection():
+            insert_index = self.index("insert")
+            first, last = selection_ends
+            if insert_index == first:
+                return last
+            elif insert_index == last:
+                return first
+            else:
+                return first
+
+        return self.index("insert")
+
+    def _get_selection_ends(self):
+        if not self.has_selection():
+            return (None, None)
+
+        return (self.index("sel.first"), self.index("sel.last"))
+
+    def _get_mark_index(self, name):
+        try:
+            return self.index(name)
+        except TclError:
+            return None
 
     def _tag_current_line(self, event=None):
         self.tag_remove("current_line", "1.0", "end")

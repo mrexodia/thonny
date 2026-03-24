@@ -29,6 +29,11 @@ def _drag(text, start_index, end_index):
     text.update()
 
 
+def _destroy_root(root):
+    root.destroy()
+    tk._default_root = None
+
+
 def test_shift_click_starts_from_current_cursor_position():
     root = tk.Tk()
     try:
@@ -38,15 +43,13 @@ def test_shift_click_starts_from_current_cursor_position():
         root.update()
 
         _click(text, "3.5")
-        for _ in range(5):
-            text.event_generate("<Left>")
-            text.update()
+        text.mark_set("insert", "3.0")
 
         _click(text, "4.end", shift=True)
 
         assert [text.index(r) for r in text.tag_ranges("sel")] == ["3.0", "4.13"]
     finally:
-        root.destroy()
+        _destroy_root(root)
 
 
 def test_shift_click_fix_does_not_break_plain_mouse_selection():
@@ -58,16 +61,38 @@ def test_shift_click_fix_does_not_break_plain_mouse_selection():
         root.update()
 
         _click(text, "3.5")
-        for _ in range(5):
-            text.event_generate("<Left>")
-            text.update()
+        text.mark_set("insert", "3.0")
         _click(text, "4.end", shift=True)
 
         _drag(text, "2.0", "2.3")
 
         assert [text.index(r) for r in text.tag_ranges("sel")] == ["2.0", "2.3"]
     finally:
-        root.destroy()
+        _destroy_root(root)
+
+
+def test_repeated_shift_click_keeps_fixed_anchor():
+    root = tk.Tk()
+    try:
+        text = EnhancedText(root, width=40, height=10)
+        text.pack()
+        text.insert("1.0", TEST_TEXT)
+        root.update()
+
+        _click(text, "3.5")
+        text.mark_set("insert", "3.0")
+
+        x, y, _, _ = text.bbox("4.end")
+        text._perform_shift_click_selection(SimpleNamespace(x=x + 1, y=y + 1))
+        text.update()
+
+        x, y, _, _ = text.bbox("2.0")
+        text._perform_shift_click_selection(SimpleNamespace(x=x + 1, y=y + 1))
+        text.update()
+
+        assert [text.index(r) for r in text.tag_ranges("sel")] == ["2.0", "3.0"]
+    finally:
+        _destroy_root(root)
 
 
 def test_escape_clears_selection():
@@ -83,7 +108,7 @@ def test_escape_clears_selection():
 
         assert [text.index(r) for r in text.tag_ranges("sel")] == []
     finally:
-        root.destroy()
+        _destroy_root(root)
 
 
 def test_smart_end_moves_to_display_end_then_logical_end():
@@ -104,4 +129,4 @@ def test_smart_end_moves_to_display_end_then_logical_end():
         text.perform_smart_end(SimpleNamespace(state=0, keysym="End"))
         assert text.index("insert") == logical_end
     finally:
-        root.destroy()
+        _destroy_root(root)
