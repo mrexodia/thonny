@@ -31,7 +31,10 @@ class TweakableText(tk.Text):
         self._original_insert = self._register_tk_proxy_function("insert", self.intercept_insert)
         self._original_delete = self._register_tk_proxy_function("delete", self.intercept_delete)
         self._original_mark = self._register_tk_proxy_function("mark", self.intercept_mark)
+        self._generated_mark_count = 0
+        self._bound_tcl_vars = set()
         self.bind("<Control-Tab>", self._redirect_ctrl_tab, False)
+        self.bind("<Destroy>", self._on_destroy, True)
 
         # ntext is the maintained successor of modernText.
         try:
@@ -45,14 +48,18 @@ class TweakableText(tk.Text):
         setattr(self, operation, function)
 
         def original_function(*args):
-            self.tk.call((self._original_widget_name, operation) + args)
+            return self.tk.call((self._original_widget_name, operation) + args)
 
         return original_function
 
     def _dispatch_tk_operation(self, operation, *args):
         f = self._tk_proxies.get(operation)
         try:
-            if f:
+            if operation == "isdead":
+                return 0
+            elif operation == "tk_bindvar":
+                return self._bind_tcl_var(*args)
+            elif f:
                 return f(*args)
             else:
                 return self.tk.call((self._original_widget_name, operation) + args)
@@ -72,11 +79,10 @@ class TweakableText(tk.Text):
                 and str(e).lower() == "nothing to " + args[0]
             ):
                 pass
+            elif operation == "index" and len(args) == 1 and self._repair_ntext_mark_reference(args[0]):
+                return self.tk.call((self._original_widget_name, operation) + args)
             else:
-                logger.exception(
-                    "[_dispatch_tk_operation] operation: " + operation + ", args:" + repr(args)
-                )
-                # traceback.print_exc()
+                raise
 
             return ""  # Taken from idlelib.WidgetRedirector
 
@@ -90,6 +96,63 @@ class TweakableText(tk.Text):
                 "Error in _dispatch_tk_operation\n" + str(e),
                 parent=tkinter._default_root,
             )
+
+    def _generate_mark_name(self):
+        self._generated_mark_count += 1
+        return f"thonny_private_mark_{self.winfo_id()}_{self._generated_mark_count}"
+
+    def _repair_ntext_mark_reference(self, name):
+        if name.startswith("ntext::left::"):
+            anchor_name = name[len("ntext::left::") :]
+        elif name.startswith("ntext::right::"):
+            anchor_name = name[len("ntext::right::") :]
+        else:
+            return False
+
+        try:
+            anchor_index = self.tk.call(self._original_widget_name, "index", anchor_name)
+        except TclError:
+            anchor_index = "insert"
+            try:
+                self._ensure_mark_exists(anchor_name, anchor_index)
+            except TclError:
+                return False
+
+        self._ensure_mark_exists(name, anchor_index)
+        return True
+
+    def _ensure_mark_exists(self, name, index="insert"):
+        try:
+            self.tk.call(self._original_widget_name, "index", name)
+        except TclError:
+            self.tk.call(self._original_widget_name, "mark", "set", name, index)
+
+    def _bind_tcl_var(self, *args):
+        if not args:
+            return ""
+
+        var_name = args[0]
+        self._bound_tcl_vars.add(var_name)
+
+        try:
+            anchor_name = self.tk.call("set", var_name)
+        except TclError:
+            return ""
+
+        self._ensure_mark_exists(anchor_name)
+        self._ensure_mark_exists(f"ntext::left::{anchor_name}", anchor_name)
+        self._ensure_mark_exists(f"ntext::right::{anchor_name}", anchor_name)
+        return ""
+
+    def _on_destroy(self, event):
+        if event.widget is not self:
+            return
+
+        for var_name in self._bound_tcl_vars:
+            try:
+                self.tk.call("unset", "-nocomplain", var_name)
+            except TclError:
+                pass
 
     def set_read_only(self, value):
         self._read_only = value
@@ -131,6 +194,9 @@ class TweakableText(tk.Text):
                 self._suppress_events = old_suppress
 
     def intercept_mark(self, *args):
+        if args == ("generate",):
+            return self._generate_mark_name()
+
         self.direct_mark(*args)
 
     def intercept_insert(self, index, chars, tags=None, **kw):
@@ -158,10 +224,24 @@ class TweakableText(tk.Text):
         return index1.startswith("sel.") and not self.has_selection()
 
     def direct_mark(self, *args):
-        self._original_mark(*args)
+        old_insert_index = None
+        if args[:2] == ("set", "insert"):
+            try:
+                old_insert_index = self.index("insert")
+            except TclError:
+                pass
+
+        result = self._original_mark(*args)
         self._last_operation_time = time.time()
         if args[:2] == ("set", "insert") and not self._suppress_events:
-            self.event_generate("<<CursorMove>>")
+            try:
+                new_insert_index = self.index("insert")
+            except TclError:
+                new_insert_index = None
+
+            if new_insert_index != old_insert_index:
+                self.event_generate("<<CursorMove>>")
+        return result
 
     def index_sel_first(self):
         # Tk will give error without this check
