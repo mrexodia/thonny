@@ -255,6 +255,10 @@ class EnhancedText(TweakableText):
         return True
 
     def _bind_mouse_aids(self):
+        self.bind("<Shift-1>", self._prepare_anchor_for_shift_click, True)
+        self.bind("<Double-Shift-1>", self._prepare_anchor_for_shift_click, True)
+        self.bind("<Triple-Shift-1>", self._prepare_anchor_for_shift_click, True)
+
         if _running_on_mac():
             self.bind("<Button-2>", self.on_secondary_click)
             self.bind("<Control-Button-1>", self.on_secondary_click)
@@ -743,6 +747,15 @@ class EnhancedText(TweakableText):
 
     def _on_mouse_click(self, event):
         self.edit_separator()
+
+    def _prepare_anchor_for_shift_click(self, event):
+        # Make Shift+click start from the current insertion cursor position,
+        # not from the previous mouse click location.
+        if self.has_selection():
+            return
+
+        anchor_name = self.tk.call("::tk::TextAnchor", self._w)
+        self.direct_mark("set", anchor_name, "insert")
 
     def _tag_current_line(self, event=None):
         self.tag_remove("current_line", "1.0", "end")
